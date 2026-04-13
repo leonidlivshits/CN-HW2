@@ -2,58 +2,60 @@ package com.example;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 public class CommandProcessor {
     private final List<Command> commands = new ArrayList<>();
-    private final ArpSender arpSender;
-    private final ArpPrinter arpPrinter;
-    private final Statistics statistics;
+    private final DnsCaptureService dnsCaptureService;
+    private final DnsMxLookupService dnsMxLookupService;
+    private final DnsComparisonService dnsComparisonService;
+    private final DnsRawQueryService dnsRawQueryService;
 
-    public CommandProcessor(ArpSender arpSender, ArpPrinter arpPrinter, Statistics statistics) {
-        this.arpSender = arpSender;
-        this.arpPrinter = arpPrinter;
-        this.statistics = statistics;
+    public CommandProcessor(
+            DnsCaptureService dnsCaptureService,
+            DnsMxLookupService dnsMxLookupService,
+            DnsComparisonService dnsComparisonService,
+            DnsRawQueryService dnsRawQueryService
+    ) {
+        this.dnsCaptureService = dnsCaptureService;
+        this.dnsMxLookupService = dnsMxLookupService;
+        this.dnsComparisonService = dnsComparisonService;
+        this.dnsRawQueryService = dnsRawQueryService;
 
-        commands.add(new Command("help", "показать справку", args -> printHelp()));
-        commands.add(new Command("start", "включить вывод всех ARP пакетов", args -> {
-            arpPrinter.setEnabled(true);
-            System.out.println("Режим вывода arp пакетов включён");
-        }));
-        commands.add(new Command("stop", "выключить вывод arp пакетов", args -> {
-            arpPrinter.setEnabled(false);
-            System.out.println("Режим вывода ARP-пакетов выключен.");
-        }));
-        commands.add(new Command("routermac", "отправить ARP запрос для определения mac роутера", args -> {
-            try {
-                arpSender.resolveRouterMac();
-            } catch (Exception e) {
-                System.err.println("Ошибка при отправке ARP запроса: " + e.getMessage());
-            }
-        }));
-        commands.add(new Command("stats", "<секунды> - собрать статистику за указанное время", args -> {
+        commands.add(new Command("help", "show supported commands", args -> printHelp()));
+        commands.add(new Command("dns-capture-start", "start DNS capture mode", args -> dnsCaptureService.startCapture()));
+        commands.add(new Command("dns-capture-stop", "stop DNS capture mode", args -> dnsCaptureService.stopCapture()));
+        commands.add(new Command("mx", "<domain> - resolve MX endpoint(s) in two-step mode", args -> {
             if (args.length < 2) {
-                System.out.println("Укажите время в секундах: stats <секунды>");
-            } else {
-                try {
-                    int seconds = Integer.parseInt(args[1]);
-                    collectStats(seconds);
-                } catch (NumberFormatException e) {
-                    System.out.println("Неверный формат числа.");
-                }
+                System.out.println("Usage: mx <domain>");
+                return;
             }
+            dnsMxLookupService.lookupMx(args[1]);
         }));
-        commands.add(new Command("exit", "завершить программу", args -> {}));
+        commands.add(new Command(
+                "compare-root-provider",
+                "query github.com, hse.ru, draw.io via root DNS and provider DNS",
+                args -> dnsComparisonService.compareRootAndProviderForDefaultDomains()
+        ));
+        commands.add(new Command(
+                "dns-raw-query",
+                "<dns-server-ip> <domain> [rr-type] - send a raw DNS query via pcap",
+                args -> {
+                    if (args.length < 3) {
+                        System.out.println("Usage: dns-raw-query <dns-server-ip> <domain> [rr-type]");
+                        return;
+                    }
+                    String rrType = args.length >= 4 ? args[3] : "A";
+                    dnsRawQueryService.queryAndPrint(args[1], args[2], rrType);
+                }
+        ));
+        commands.add(new Command("exit", "exit application", args -> {
+        }));
     }
 
     public void printHelp() {
         System.out.println("Доступные команды:");
         for (Command cmd : commands) {
-            String displayName = cmd.getName();
-            if (cmd.getName().equals("stats")) {
-                displayName = "stats <секунды>";
-            }
-            System.out.printf("  %-24s - %s%n", displayName, cmd.getDescription());
+            System.out.printf("  %-24s - %s%n", cmd.getName(), cmd.getDescription());
         }
     }
 
@@ -67,20 +69,7 @@ public class CommandProcessor {
                 return;
             }
         }
-        System.out.println("Неизвестная команда. Введите help.");
-    }
 
-    private void collectStats(int seconds) {
-        System.out.println("Сбор статистики в течение " + seconds + " секунд...");
-        statistics.startCollection();
-
-        try {
-            TimeUnit.SECONDS.sleep(seconds);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        statistics.stopCollection();
-        statistics.print();
+        System.out.println("Unknown command. Type help.");
     }
 }
