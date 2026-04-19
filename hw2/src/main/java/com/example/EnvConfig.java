@@ -30,7 +30,7 @@ public class EnvConfig {
 
         try (Stream<String> lines = Files.lines(path)) {
             lines.forEach(line -> {
-                String trimmed = line.trim();
+                String trimmed = stripBom(line).trim();
                 if (trimmed.isEmpty() || trimmed.startsWith("#")) {
                     return;
                 }
@@ -40,8 +40,8 @@ public class EnvConfig {
                     return;
                 }
 
-                String key = trimmed.substring(0, eq).trim();
-                String value = trimmed.substring(eq + 1).trim();
+                String key = stripBom(trimmed.substring(0, eq)).trim();
+                String value = stripBom(trimmed.substring(eq + 1)).trim();
                 env.put(key, value);
             });
         }
@@ -150,5 +150,15 @@ public class EnvConfig {
             bytes[i] = (byte) Integer.parseInt(hex[i], 16);
         }
         return bytes;
+    }
+
+    private static String stripBom(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+        if (value.charAt(0) == '\uFEFF') {
+            return value.substring(1);
+        }
+        return value;
     }
 }

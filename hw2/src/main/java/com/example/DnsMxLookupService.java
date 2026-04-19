@@ -73,7 +73,10 @@ public class DnsMxLookupService {
                 continue;
             }
 
-            String host = decodeDomain(mxData.getExchange(), headerRawData).toLowerCase(Locale.ROOT);
+            String host = normalizeHost(decodeDomain(mxData.getExchange(), headerRawData));
+            if (host.isEmpty()) {
+                continue;
+            }
             int preference = mxData.getPreference() & 0xFFFF;
             records.add(new MxRecord(host, preference));
         }
@@ -137,6 +140,17 @@ public class DnsMxLookupService {
     private String normalizeDomain(String domain) {
         String normalized = domain.trim().toLowerCase(Locale.ROOT);
         if (normalized.endsWith(".")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
+    }
+
+    private String normalizeHost(String host) {
+        String normalized = host.trim().toLowerCase(Locale.ROOT);
+        while (normalized.startsWith(".")) {
+            normalized = normalized.substring(1);
+        }
+        while (normalized.endsWith(".")) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;
